@@ -1,0 +1,78 @@
+
+version: 1
+
+defaults:
+  strategy: incremental
+  primary_key: Id
+  delay: 15                 # overlap window in minutes - absorbs clock skew
+  target_catalog: workspace
+  target_schema: nb_bronze
+  source_system: azuresql
+  is_active: true
+
+tables:
+
+  # --- reference / small dimensions: full reload is the correct choice -------
+  - source_table: dbo.Company
+    strategy: full_reload
+    watermark_col: null
+
+  - source_table: dbo.Currency
+    strategy: full_reload
+    primary_key: Code
+    watermark_col: null
+
+  - source_table: dbo.DocumentType
+    strategy: full_reload
+    watermark_col: null
+
+  - source_table: dbo.[Label]           # reserved word, quoted at the source
+    strategy: full_reload
+    watermark_col: null
+
+  # --- no reliable change column at all -> must full reload -----------------
+  - source_table: dbo.GLAccount
+    strategy: full_reload
+    watermark_col: null
+
+  - source_table: dbo.CostCenter
+    strategy: full_reload
+    watermark_col: null
+
+  # --- master data ----------------------------------------------------------
+  - source_table: dbo.Supplier
+    watermark_col: ChangedTimestamp     # also has a true rowversion (see doc 05)
+
+  - source_table: dbo.[User]            # reserved word; PII masked in Silver
+    watermark_col: ChangedTimestamp
+
+  # --- transactional --------------------------------------------------------
+  - source_table: dbo.Invoice
+    watermark_col: ChangedTimestamp     # NOT EntityVersion: that restarts at 1 per row
+
+  - source_table: dbo.InvoiceLine
+    watermark_col: ChangedTimestamp
+
+  - source_table: dbo.InvoiceLineCoding
+    primary_key: InvoiceLineId, CodingSeq   # composite, no surrogate key
+    watermark_col: ChangedTimestamp
+
+  - source_table: dbo.WorkflowTask
+    watermark_col: CreatedTimestamp     # hard-deleted on completion - see note below
+
+  - source_table: dbo.Comment
+    watermark_col: CreatedTimestamp     # append-only, the cheapest case
+
+  - source_table: dbo.Attachment
+    watermark_col: CreatedTimestamp
+
+  - source_table: dbo.InvoiceLabel
+    primary_key: InvoiceId, LabelId     # composite bridge for Invoice.LabelIds
+    watermark_col: AppliedTimestamp
+
+  - source_table: dbo.ImportBatch
+    watermark_col: ReceivedTimestamp
+
+  - source_table: dbo.ExchangeRate
+    watermark_col: CreatedTimestamp     # NOT RateDate: rates arrive backdated
+

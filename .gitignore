@@ -1,0 +1,27 @@
+# Secrets — never commit real credentials
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+myenv/
+*.egg-info/
+.pytest_cache/
+
+# Generator state / staged data files
+src/generator/_state/
+data/
+*.parquet
+*.bcp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+docs/
