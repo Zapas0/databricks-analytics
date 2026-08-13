@@ -22,10 +22,6 @@ resources/        Databricks Job / DAB definitions
 docs/             architecture, decisions, cheatsheet, roadmap
 ```
 
-This project contains **only the pipeline**. The fake source database is built and
-maintained by a separate project, `../source-simulator` — a test tool that is never
-imported or deployed here.
-
 ## Separation of concerns
 
 | Concern | Owner |
