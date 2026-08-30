@@ -1,0 +1,19 @@
+resources:
+  jobs:
+    bronze_job:
+      name: bronze-round-1
+
+      tasks:
+        - task_key: run_bronze
+
+          spark_python_task:
+            python_file: ../src/bronze/pipeline.py
+
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - ../requirements.txt
