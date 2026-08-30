@@ -32,15 +32,7 @@ TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def build_where_clause(cfg, watermark, ceiling):
-    """The incremental predicate, as pure string logic so it can be unit-tested.
 
-    Lower bound is watermark minus an overlap window, which absorbs clock skew
-    and late commits. Re-reading a few rows is free because the write is a MERGE;
-    missing a row is not.
-
-    Upper bound is the ceiling captured before the read, so the batch is a closed
-    interval and anything arriving later belongs to the next run.
-    """
     column = cfg["watermark_col"]
     low = (watermark - timedelta(minutes=int(cfg["delay"]))).strftime(TS_FORMAT)
 
@@ -74,16 +66,13 @@ def ingest_table(spark, settings, password, cfg, run_id):
 
     watermark = find_watermark(spark, cfg)
 
-    # Ceiling BEFORE the read: rows landing during the write belong to the next run.
     ceiling = source_max(spark, settings, password, cfg)
 
     batch = add_metadata(
         pull_delta(spark, settings, password, cfg, watermark, ceiling), cfg, run_id
     )
 
-    # The only action that reads the source. Counts come from Delta afterwards,
-    # because .cache() is unavailable on serverless and a second action would
-    # re-query (and could see different data).
+
     write_batch(spark, cfg, batch)
 
     rows_read, rows_written = metrics_to_counts(
@@ -101,9 +90,6 @@ def ingest_table(spark, settings, password, cfg, run_id):
 def run_bronze(spark, settings, password, configs, run_id=None, retries=DEFAULT_RETRIES):
     """Ingest every enabled table.
 
-    Failures are isolated per table so one bad source does not stop the rest,
-    recorded in control.pipeline_runs, then re-raised at the end so a scheduled
-    Job reports failure instead of a false green.
     """
     tracker = RunTracker(spark, "bronze_ingest", "bronze", run_id)
     logger.info("bronze run %s starting (%d tables)", tracker.run_id, len(configs))
@@ -136,8 +122,7 @@ def run_bronze(spark, settings, password, configs, run_id=None, retries=DEFAULT_
                 break
 
             except Exception as error:
-                # Only retry things a retry can fix. A schema mismatch fails
-                # three times just as fast as once.
+
                 if attempt < retries and is_transient(error):
                     logger.warning(
                         "%-22s transient (attempt %d/%d): %s",
