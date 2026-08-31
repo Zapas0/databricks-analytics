@@ -8,19 +8,21 @@ Target architecture: `docs/10_roadmap.md` (staged plan) and the reference
 ## Layout
 
 ```
-config/           ingestion_config.yaml  - WHAT to process (source of truth, synced to control.tables)
+config/           ingestion_config.yaml  - WHAT to process (synced to control.tables)
 src/
-  common/         config, connections, logging, exceptions  - shared utilities
-  bronze/         pipeline, watermark, writer               - raw ingestion
-  silver/         (next)                                    - cleaned + conformed
-  gold/           (later)                                   - star schema
-  quality/        (later)                                   - data-quality checks
+  common.py       connection + config              - shared by every layer
+  bronze.py       the Bronze pipeline              - raw ingestion
+  silver.py       (next)                           - cleaned + conformed
 notebooks/        thin drivers that import from src/
 sql/              control-schema DDL
-tests/            unit + integration
+tests/            unit tests, no cluster required
 resources/        Databricks Job / DAB definitions
 docs/             architecture, decisions, cheatsheet, roadmap
 ```
+
+One file per layer, plus `common.py` for what every layer needs. The functions
+in `bronze.py` are the notebook's functions, with the same names and the same
+order — `find_watermark → get_latest_wm → pull_delta → push_delta → update_wm`.
 
 ## Separation of concerns
 
@@ -36,11 +38,14 @@ docs/             architecture, decisions, cheatsheet, roadmap
 ## Schemas
 
 ```
-workspace.control      tables, watermarks, pipeline_runs, data_quality_results
+workspace.control      tables, watermarks, pipeline_runs
 workspace.nb_bronze    Bronze (Round 1: notebooks + Jobs)
 workspace.nb_silver    Silver
 workspace.nb_gold      Gold
 ```
+
+`data_quality_results` comes back when the checks that write to it are built,
+after Silver.
 
 Rounds 2 and 3 rebuild the same medallion as Lakeflow Declarative Pipelines (`ldp_*`)
 and dbt (`dbt_*`). Source stays `dbo.*` in Azure SQL.
