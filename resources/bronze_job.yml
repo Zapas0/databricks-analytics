@@ -1,19 +1,30 @@
+# Bronze job.
+#
+# CHANGED: this was a `spark_python_task` pointed at src/bronze/pipeline.py.
+# That could never have run, for three reasons:
+#   1. pipeline.py is a library - no `if __name__ == "__main__"`, so running it
+#      as a script defined some functions and exited without ingesting anything
+#   2. its imports needed src/ on sys.path; running a file directly puts only
+#      src/bronze/ there, so `from common...` raised ModuleNotFoundError
+#   3. nothing supplied the connection settings or dbutils for the secret
+#
+# A notebook_task fixes all three at once: the notebook already puts src/ on
+# sys.path, already has dbutils, and already holds the connection settings.
+# Same code either way - the notebook is a four-line driver over src/.
+
 resources:
   jobs:
     bronze_job:
       name: bronze-round-1
 
       tasks:
-        - task_key: run_bronze
+        - task_key: bronze_ingest
 
-          spark_python_task:
-            python_file: ../src/bronze/pipeline.py
+          notebook_task:
+            notebook_path: ../notebooks/1_Bronze.ipynb
 
-          environment_key: default
-
-      environments:
-        - environment_key: default
-          spec:
-            client: "1"
-            dependencies:
-              - ../requirements.txt
+      # One task that loops over all tables, not one task per table.
+      # 17 tables of a few thousand rows each are not worth 17 serverless cold
+      # starts, and free-tier Azure SQL would rather have one connection at a
+      # time than sixteen. run_bronze() already isolates failures per table.
+      max_concurrent_runs: 1
