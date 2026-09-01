@@ -97,19 +97,6 @@ def get_latest_wm(spark, conn, config):
 
 def pull_delta(spark, conn, config, wm, ceiling):
     """Read this batch from the source, filtered inside the database.
-
-    BUGFIX 1 - the batch now has a ceiling.
-
-    The notebook read  WHERE col > watermark  with no upper bound, and then
-    update_wm called MAX() on the source *after* the write had finished. Any
-    row that arrived while the write was running got counted by that MAX() but
-    was never in the batch. The watermark jumped past it, and it was never
-    ingested - a silent, permanent loss of exactly the rows that arrive when
-    the pipeline is busiest.
-
-    The fix is to capture the ceiling BEFORE reading and bound the batch:
-    [watermark - delay, ceiling]. Anything arriving after the ceiling is simply
-    the next run's work.
     """
     if config["watermark_col"] is None:
         return read_jdbc(spark, conn, config["source_table"])
@@ -134,16 +121,6 @@ def pull_delta(spark, conn, config, wm, ceiling):
 def merge_condition(config):
     """Build the MERGE join predicate from the configured primary key.
 
-    BUGFIX 2 - the notebook hardcoded "t.Id = s.Id".
-
-    That is correct for the fifteen tables keyed on Id, and silently wrong for
-    the two that are not:
-        InvoiceLineCoding -> InvoiceLineId + CodingSeq
-        InvoiceLabel      -> InvoiceId + LabelId
-    On those, every source row matches many target rows and the MERGE corrupts
-    the table. Building the predicate from primary_key handles both cases with
-    the same line of code. Backticks guard column names that clash with SQL
-    keywords.
     """
     keys = [key.strip() for key in str(config["primary_key"]).split(",") if key.strip()]
     return " AND ".join(f"t.`{key}` = s.`{key}`" for key in keys)
@@ -189,14 +166,6 @@ def push_delta(spark, delta, config, run_id):
 
 def update_wm(spark, config, ceiling, run_id):
     """Move the watermark to the ceiling this run actually used.
-
-    BUGFIX 1, second half. The notebook called get_latest_wm() here, re-reading
-    MAX() from the source after the write. Now the ceiling captured before the
-    read is passed in, so the watermark can only ever advance to a value we
-    genuinely ingested up to.
-
-    Called only after push_delta succeeds. If the write fails the mark does not
-    move, so the next run redoes the batch - harmlessly, because it is a MERGE.
     """
     from delta.tables import DeltaTable
     from pyspark.sql import functions as F
